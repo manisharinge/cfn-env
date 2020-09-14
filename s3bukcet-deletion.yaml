@@ -1,0 +1,7 @@
+AWSTemplateFormatVersion: "2010-09-09"
+    
+Resources:
+  s3BucketForTrailData:
+    Type: "AWS::S3::Bucket"
+    Properties: 
+        BucketName: "mrringe-us-east123"
