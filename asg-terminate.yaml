@@ -1,0 +1,95 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 'Custom resource example - ASG suspend/resume'
+
+Parameters:
+  Input:
+    Type: String
+    Description: Make ASG
+    Default: true
+    AllowedValues: [true, false]
+
+Conditions:
+  Enabled: !Equals [!Ref Input, true]
+
+Resources:
+  Asg:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Condition: Enabled
+    Properties:
+      AvailabilityZones:
+        Fn::GetAZs:
+          Ref: "AWS::Region"
+      LaunchConfigurationName: !Ref LC
+      MaxSize: 0
+      MinSize: 0
+
+  LC:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      # Update to suit
+      ImageId: "ami-0323c3dd2da7fb37d"
+      InstanceType: "t2.micro"
+
+  AsgProcessModificationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [lambda.amazonaws.com]
+      Policies:
+      - PolicyName: AsgProcessModification
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - 'autoscaling:ResumeProcesses'
+            - 'autoscaling:SuspendProcesses'
+            # http://docs.aws.amazon.com/autoscaling/latest/userguide/IAM.html#AutoScaling_ARN_Format
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup,
+            - logs:CreateLogStream,
+            - logs:PutLogEvents
+            Resource: 'arn:aws:logs:*:*:*'
+
+  AsgProcessModifierFunction:
+    DependsOn: Asg
+    Type: AWS::Lambda::Function
+    Properties:
+      Description: 'Modifies ASG processes during CF stack creation'
+      Code:
+        ZipFile: |
+          import cfnresponse
+          import boto3
+
+          def handler(event, context):
+            print 'event: ', event
+            print 'context: ', context
+            client = boto3.client('autoscaling')
+            props = event['ResourceProperties']
+            if props['Action'] == 'SuspendProcesses':
+              response = client.suspend_processes(AutoScalingGroupName=props['AutoScalingGroupName'], ScalingProcesses=props['ScalingProcesses'])
+            elif props['Action'] == 'ResumeProcesses':
+              response = client.resume_processes(AutoScalingGroupName=props['AutoScalingGroupName'], ScalingProcesses=props['ScalingProcesses'])
+            cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, "CustomResourcePhysicalID")
+      Handler: index.handler
+      Role: !GetAtt AsgProcessModificationRole.Arn
+      Runtime: 'python2.7'
+
+  ModifyAsg:
+    Type: AWS::CloudFormation::CustomResource
+    Condition: Enabled
+    Version: 1.0
+    Properties:
+      ServiceToken: !GetAtt AsgProcessModifierFunction.Arn
+      Action: SuspendProcesses
+      AutoScalingGroupName: !Ref Asg
+      ScalingProcesses:
+      - Terminate
+      - AZRebalance
