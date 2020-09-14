@@ -1,0 +1,12 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  S3Bucket: 
+    Description: "Select S3Bucket (awsfnt.tsops.keytool, awsmaui.tsops.keytool, awsprod.tsops.keytool)"
+    Type: "String"
+          
+Resources:
+  s3BucketForTrailData:
+    Type: "AWS::S3::Bucket"
+    Properties: 
+        BucketName: !Ref S3Bucket
