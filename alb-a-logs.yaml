@@ -1,0 +1,51 @@
+AccessLogBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
+    Properties:
+      BucketName: !Join ['-', [!Ref 'AWS::StackName', 'lb-access-log-bucket']]
+      AccessControl: "LogDeliveryWrite"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration: 
+        - ServerSideEncryptionByDefault: 
+            SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration: 
+        RestrictPublicBuckets: true
+        BlockPublicAcls : true
+        BlockPublicPolicy : true
+        IgnorePublicAcls : true        
+
+  AccessLogBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogBucket
+      PolicyDocument:
+        Version: 2012-10-17        
+        Statement:
+          Effect: Allow
+          Principal:
+            AWS: "arn:aws:iam::054676820928:root"
+          Action:
+            - s3:PutObject
+          Resource: 
+            !Sub |-
+              arn:aws:s3:::${AccessLogBucket}/alb-internal/AWSLogs/485695650525/*
+          Effect: Allow
+          Principal: 
+            Service: "delivery.logs.amazonaws.com"
+          Action: s3:PutObject
+          Resource:    
+            !Sub |-
+              arn:aws:s3:::${AccessLogBucket}/alb-internal/AWSLogs/485695650525/*
+          Condition:
+            StringLike:
+              s3:x-amz-acl: bucket-owner-full-control
+          Effect: Allow
+          Principal: 
+            Service: "delivery.logs.amazonaws.com"                                                  
+          Action:
+            - s3:GetBucketAcl
+          Resource:
+            !Sub |-
+              arn:aws:s3:::${AccessLogBucket}
+                  
